@@ -30,12 +30,7 @@
                 <%- comment_list[i].get('content') %>
             </div>
             <div class="check">
-                <!-- <% if(comment_list[i].get('isHide')) { %>
-                <a href="/comments/not-spam?id=<%= comment_list[i].get('objectId') %>" rel="nofollow">这不是垃圾评论</a>
-                <% } else { %>
-                <a href="/comments/mark-spam?id=<%= comment_list[i].get('objectId') %>" rel="nofollow">标记为垃圾评论</a>
-                <% } %>
-                <span class="spacer">•</span> -->
+                
                 <a class="red" href="/comments/delete?id=<%= comment_list[i].get('objectId') %>" rel="nofollow">删除</a>
                 <span class="spacer">•</span>
                 <a class="blue" href="<%= process.env.SITE_URL+comment_list[i].get('url')+'#' + comment_list[i].get('objectId') %>" target="_blank" rel="nofollow">查看评论</a>
