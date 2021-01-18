@@ -1,51 +1,96 @@
-<!DOCTYPE HTML>
-<html>
-<head>
-    <title><%= title %></title>
-    <link rel="stylesheet" href="/stylesheets/style.css">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body>
-<div class="comment-main">
-    <div class="header">
-        <div class="title"><span><%= title %></span></div>
+'use strict';
+const router = require('express').Router();
+const AV = require('leanengine');
+const mail = require('../utilities/send-mail');
+const spam = require('../utilities/check-spam');
 
-        <div class="logout-wrapper"><a href="/logout">退出登录</a></div>
-    </div>
+const content = AV.Object.extend('content');
 
-    <ul class="content">
-        <% for(var i = 0; i < comment_list.length; i++) { %>
-        <li class="vcard">
-            <div class="vhead">
-                <% if(comment_list[i].get('title')) { %>
-                    <span id="nick"><%= comment_list[i].get('title') %></span>
-                <% } %>
-                <% var date = comment_list[i].get('createdAt') %>
-                <% if(comment_list[i].get('tag')) { %>
-                <span class="spacer">•</span><span class="vtime"><%= comment_list[i].get('tag') %></span>
-                <% } %>
-                <span class="spacer">•</span><span class="vtime"><%= dateFormat(date) %></span>
-            </div>
-            <div class="vcomment">
-                <%- comment_list[i].get('content') %>
-            </div>
-            <div class="check">
-                
-                <a class="red" href="/comments/delete?id=<%= comment_list[i].get('objectId') %>" rel="nofollow">删除</a>
-                <span class="spacer">•</span>
-                <a class="blue" href="<%= process.env.SITE_URL+comment_list[i].get('url')+'#' + comment_list[i].get('objectId') %>" target="_blank" rel="nofollow">查看评论</a>
-                <% if (comment_list[i].get('rid')) { %>
-                <% if(comment_list[i].get('isNotified')) { %>
-                <span class="spacer">•</span><span class="vtime">通知已送达</span>
-                <% } else { %>
-                <span class="spacer">•</span>
-                <a href="/comments/resend-email?id=<%= comment_list[i].get('objectId') %>" rel="nofollow">重发通知邮件</a>
-                <% } %>
-                <% } %>
-            </div>
-        </li>
-        <% } %>
-    </ul>
-</div>
-</body>
-</html>
+// content 列表
+router.get('/', function (req, res, next) {
+    if (req.currentUser) {
+        let query = new AV.Query(content);
+        query.descending('createdAt');
+        query.limit(50);
+        query.find().then(function (results) {
+            res.render('comments', {
+                title: process.env.SITE_NAME + '上的评论',
+                comment_list: results
+            });
+        }, function (err) {
+            if (err.code === 101) {
+                res.render('comments', {
+                    title: process.env.SITE_NAME + '上的评论',
+                    comment_list: []
+                });
+            } else {
+                next(err);
+            }
+        }).catch(next);
+    } else {
+        res.redirect('/');
+    }
+});
+
+router.get('/resend-email', function (req, res, next) {
+    if (req.currentUser) {
+    let query = new AV.Query(content);
+    query.get(req.query.id).then(function (object) {
+        query.get(object.get('rid')).then(function (parent) {
+                mail.send(object, parent);
+                res.redirect('/comments')
+            }, function (err) {
+            }
+        ).catch(next);
+    }, function (err) {
+    }).catch(next);
+    } else {
+        res.redirect('/');
+    }
+});
+
+router.get('/delete', function (req, res, next) {
+    if (req.currentUser) {
+        let query = new AV.Query(content);
+        query.get(req.query.id).then(function (object) {
+            object.destroy();
+            res.redirect('/comments')
+        }, function (err) {
+        }).catch(next);
+    } else {
+        res.redirect('/');
+    }
+});
+
+router.get('/not-spam', function (req, res, next) {
+    if (req.currentUser) {
+        let query = new AV.Query(content);
+        query.get(req.query.id).then(function (object) {
+            object.set('isSpam', false);
+            object.set('ACL', {"*":{"read":true}} );
+            object.save();
+            spam.submitHam(object);
+            res.redirect('/comments')
+        }, function (err) {
+        }).catch(next);
+    } else {
+        res.redirect('/');
+    }
+});
+router.get('/mark-spam', function (req, res, next) {
+    if (req.currentUser) {
+        let query = new AV.Query(content);
+        query.get(req.query.id).then(function (object) {
+            object.set('isSpam', true);
+            object.set('ACL', {"*":{"read":false}} );
+            object.save();
+            spam.submitSpam(object);
+            res.redirect('/comments')
+        }, function (err) {
+        }).catch(next);
+    } else {
+        res.redirect('/');
+    }
+});
+
+module.exports = router;
